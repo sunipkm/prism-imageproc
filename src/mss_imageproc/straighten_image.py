@@ -72,8 +72,6 @@ class QuantityDecoder:
         value = value.strip()
         if value.startswith('['):
             arr_str, unit = value.rsplit(']', 1)
-            print(
-                f'Decoding Quantity from string: arr_str="{arr_str}", unit="{unit}"')
             arr_str = arr_str.strip('[]')
             arr = fromstring(arr_str, sep=' ', dtype=float)
             return Quantity(arr, unit.strip())
@@ -364,7 +362,6 @@ class MosaicImageStraightener:
                 tar.extractall(path=tmpdir)
                 imaps = {}
                 for dsdir in tmpdir.iterdir():
-                    print(f'Loading curve map from {dsdir}')
                     if not dsdir.is_dir():
                         # Load the mapper
                         if dsdir.suffix == '.json' and '_mapper' in dsdir.stem:
@@ -373,7 +370,6 @@ class MosaicImageStraightener:
                     win_name = dsdir.name
                     datasets = []
                     for dsfile in natsorted(dsdir.iterdir()):
-                        print(f'Loading dataset from {dsfile}')
                         if not dsfile.is_file() or dsfile.suffix != '.nc':
                             continue
                         ds = load_dataset(dsfile)
@@ -458,7 +454,6 @@ class MosaicImageStraightener:
             ret: List = []
             for ds in self._imaps.get(window, []):
                 # Trick to select the same location across different datasets
-                print(ds)
                 imageset = Dataset(
                     data_vars={
                         'image': (('y', 'x'), image.values),
@@ -477,7 +472,6 @@ class MosaicImageStraightener:
                 res = ds['resolution']
                 data = imageset.where(imageset['loc'], drop=True)['image']
                 data = data.sel(y=slice(*yran), x=slice(*xran))
-
                 if inplace:
                     try:
                         data /= res.data
@@ -485,10 +479,9 @@ class MosaicImageStraightener:
                         data = data.data / res.data
                 else:
                     data = data / res.data
-
-                out = warp(
-                    data.data[:, :], xform, cval=np.nan)  # type: ignore
-                out = DataArray(out*10, coords={
+                data = warp(
+                    data.values[:, :], xform, cval=nan)
+                out = DataArray(data*10, coords={
                     'y': (
                         ('y',),
                         ds['wly'].data,  # type: ignore
