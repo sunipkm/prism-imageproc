@@ -8,8 +8,9 @@ from .straighten_image import (
     ScaleType,
     TranslationType,
     PixelSizeType,
-    TransformationMatrix
+    TransformMatrix
 )
+from . import utils
 
 __all__ = [
     "MosaicImageMapper",
@@ -17,6 +18,7 @@ __all__ = [
     "ScaleType",
     "TranslationType",
     "PixelSizeType",
-    "TransformationMatrix",
+    "TransformMatrix",
+    "utils",
     "__version__",
 ]

@@ -1,97 +1,21 @@
 # %% Imports
 from __future__ import annotations
-from json import JSONEncoder
 from pathlib import Path
 import tarfile
 from tempfile import TemporaryDirectory
-from typing import Any, Dict, List, Literal, Optional, Sequence, Tuple, Union, overload
-from dacite import Config
-from tomlkit import register_encoder
-from tomlkit.items import Item as TomlItem, item as tomlitem
+from typing import Dict, List, Literal, Sequence, Tuple, Union, overload
 from xarray import Dataset, DataArray, concat, MergeError, load_dataset
 from astropy.units import Quantity
 import astropy.units as u
 from skimage.transform import warp, AffineTransform
 from natsort import natsorted
 from dataclasses import dataclass, field
-from numpy import arange, asarray, fromstring, interp, meshgrid, sqrt, stack, nan, ndarray, where
+from numpy import arange, asarray, interp, meshgrid, sqrt, stack, nan, ndarray, where
 from numpy.typing import NDArray
 from serde_dataclass import json_config, toml_config, JsonDataclass, TomlDataclass
 import astropy_xarray as _
-import sys
 
-# %% Type Aliases
-if sys.version_info >= (3, 11):
-    type MaybeQuantity = str | Quantity
-else:
-    from typing import TypeAlias, Union
-    MaybeQuantity: TypeAlias = Union[str, Quantity]
-
-
-def to_quantity(value: MaybeQuantity) -> Quantity:
-    if isinstance(value, str):
-        return Quantity(value)
-    elif isinstance(value, Quantity):
-        return value
-    else:
-        raise ValueError('Invalid quantity specification.')
-
-
-def optional_quantity(value: Optional[MaybeQuantity]) -> Optional[Quantity]:
-    if value is None:
-        return None
-    return to_quantity(value)
-
-# %% Serde Helpers
-
-
-@register_encoder
-def qty_ndarray_encoder(obj: Any, /, _parent=None, _sort_keys=False) -> TomlItem:
-    if isinstance(obj, Quantity):
-        return tomlitem(f'{obj}')
-    elif isinstance(obj, ndarray):
-        return tomlitem(obj.tolist())
-    else:
-        raise TypeError(
-            f'Object of type {type(obj)} is not JSON serializable.')
-
-
-class QuantityEncoder(JSONEncoder):
-    def default(self, o: Any) -> Any:
-        if isinstance(o, Quantity):
-            return f'{o}'
-        elif isinstance(o, ndarray):
-            return o.tolist()
-        else:
-            return super().default(o)
-
-
-class QuantityDecoder:
-    @staticmethod
-    def decode_qty(value: str) -> Quantity:
-        value = value.strip()
-        if value.startswith('['):
-            arr_str, unit = value.rsplit(']', 1)
-            arr_str = arr_str.strip('[]')
-            arr = fromstring(arr_str, sep=' ', dtype=float)
-            return Quantity(arr, unit.strip())
-        return Quantity(value)
-
-    @staticmethod
-    def decode_ndarray(value: List[Any]) -> NDArray:
-        return asarray(value, dtype=float)
-
-    @property
-    def config(self) -> Config:
-        return Config(
-            type_hooks={
-                Quantity: self.decode_qty,
-                ndarray: self.decode_ndarray
-            },
-        )
-
-
-QUANTITY_DECODER = QuantityDecoder().config
+from .utils import QuantityEncoder, QUANTITY_DECODER
 
 # %% Definitions
 
@@ -104,7 +28,7 @@ PaddingMode = Literal['constant', 'edge', 'symmetric', 'reflect', 'wrap']
 @dataclass
 @json_config(ser=QuantityEncoder, de=QUANTITY_DECODER)
 @toml_config(de=QUANTITY_DECODER)
-class TransformationMatrix(JsonDataclass, TomlDataclass):
+class TransformMatrix(JsonDataclass, TomlDataclass):
     """Reusable affine transform state and composition helper."""
 
     matrix: ndarray = field(
@@ -128,7 +52,7 @@ class TransformationMatrix(JsonDataclass, TomlDataclass):
     def from_matrix(
             cls,
             matrix: NDArray,
-    ) -> TransformationMatrix:
+    ) -> TransformMatrix:
         return cls(matrix=asarray(matrix, dtype=float))
 
     def append(self, affine: AffineTransform) -> None:
@@ -171,8 +95,8 @@ class MosaicImageMapper(JsonDataclass):
     pixel_size: PixelSizeType
     bounds_x: Tuple[float, float]
     bounds_y: Tuple[float, float]
-    transform: TransformationMatrix = field(
-        default_factory=TransformationMatrix)
+    transform: TransformMatrix = field(
+        default_factory=TransformMatrix)
     _source_x0: float = field(init=False)
     _source_y0: float = field(init=False)
     _inv_dx: float = field(init=False)
@@ -193,8 +117,8 @@ class MosaicImageMapper(JsonDataclass):
             raise ValueError('target_x and target_y must not be empty')
         if self.pixel_size[0] <= 0 or self.pixel_size[1] <= 0:
             raise ValueError('pixel_size must be positive')
-        if not isinstance(self.transform, TransformationMatrix):
-            self.transform = TransformationMatrix.from_matrix(
+        if not isinstance(self.transform, TransformMatrix):
+            self.transform = TransformMatrix.from_matrix(
                 asarray(self.transform, dtype=float))
 
         # Match MosaicImageTransform coordinate-index behavior for consistency.
