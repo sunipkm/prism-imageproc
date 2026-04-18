@@ -53,7 +53,7 @@ class ImageStraightener:
             raise ValueError(f'Archive {archive_path} does not exist')
         mapper = None
         with tarfile.open(archive_path, "r:xz") as tar:
-            with TemporaryDirectory() as tmpdir:
+            with TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:
                 tmpdir = Path(tmpdir)
                 tmpdir.mkdir(exist_ok=True, parents=True)
                 tar.extractall(path=tmpdir)
